@@ -7,7 +7,8 @@ RUN go install github.com/air-verse/air@latest
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+# COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 # In dev, source is mounted as a volume — Air watches for changes
@@ -19,7 +20,8 @@ FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+# COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 COPY . .
