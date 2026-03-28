@@ -55,3 +55,25 @@ func (h *MeHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, resp)
 }
+
+func (h *MeHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*auth.Claims)
+	if !ok || claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := queries.DeleteUserSessionFromClaims(claims, h.db, r.Context())
+	if err != nil {
+		http.Error(w, "Could not delete session", http.StatusInternalServerError)
+		return
+	}
+	// clears cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:   "auth_token",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	w.WriteHeader(http.StatusOK)
+}

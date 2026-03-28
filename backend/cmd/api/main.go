@@ -64,6 +64,7 @@ func main() {
 		r.Use(middleware.Authenticate)
 
 		r.Get("/api/me", meHandler.Me)
+		r.Post("/api/logout", meHandler.Logout)
 
 		// Connect a second provider to an existing account
 		r.Get("/auth/google/connect", authHandler.GoogleLogin)   // reuses same flow

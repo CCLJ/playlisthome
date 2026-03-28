@@ -44,3 +44,12 @@ func GetOAuthProvidersFromUser(userId string, db *pgxpool.Pool, ctx context.Cont
 	}
 	return providers, nil
 }
+
+func DeleteUserSessionFromClaims(claims *auth.Claims, db *pgxpool.Pool, ctx context.Context) error {
+	_, err := db.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, claims.SessionID)
+	if err != nil {
+		return fmt.Errorf("Error deleting session with ID %s: %w", claims.SessionID, err)
+	}
+
+	return nil
+}
