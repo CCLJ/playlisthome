@@ -31,6 +31,7 @@ func main() {
 
 	// Wire up handlers
 	authHandler := handlers.NewAuthHandler(pool)
+	meHandler := *handlers.NewMeHandler(pool)
 
 	// Router
 	r := chi.NewRouter()
@@ -61,6 +62,8 @@ func main() {
 	// ── Protected routes ───────────────────────────────────────────────────────
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate)
+
+		r.Get("/api/me", meHandler.Me)
 
 		// Connect a second provider to an existing account
 		r.Get("/auth/google/connect", authHandler.GoogleLogin)   // reuses same flow
