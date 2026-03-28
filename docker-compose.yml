@@ -33,6 +33,7 @@ services:
       PORT: 8080
       ENV: development
       JWT_SECRET: ${JWT_SECRET:-change_me_in_production_please}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # YouTube / Google OAuth
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}

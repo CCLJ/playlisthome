@@ -2,18 +2,21 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/CCLJ/playlisthome/internal/auth"
 	"github.com/CCLJ/playlisthome/internal/models"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/oauth2"
 )
+
+var frontendURL = os.Getenv("FRONTEND_URL")
 
 // AuthHandler holds dependencies for auth-related endpoints.
 type AuthHandler struct {
@@ -31,13 +34,6 @@ func NewAuthHandler(db *pgxpool.Pool) *AuthHandler {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-func randomState() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -48,15 +44,21 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // GET /auth/google/login
 func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
-	state := randomState()
-	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: state, HttpOnly: true, MaxAge: 300})
+	state, err := GenerateSignedState()
+	if err != nil {
+		http.Error(w, "failed to generate state", http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, h.google.AuthCodeURL(state, oauth2.AccessTypeOffline), http.StatusTemporaryRedirect)
 }
 
 // GET /auth/spotify/login
 func (h *AuthHandler) SpotifyLogin(w http.ResponseWriter, r *http.Request) {
-	state := randomState()
-	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: state, HttpOnly: true, MaxAge: 300})
+	state, err := GenerateSignedState()
+	if err != nil {
+		http.Error(w, "failed to generate state", http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, h.spotify.AuthCodeURL(state), http.StatusTemporaryRedirect)
 }
 
@@ -97,8 +99,7 @@ func (h *AuthHandler) handleCallback(
 	fetchInfo fetchUserInfoFn,
 ) {
 	// 1. Validate state
-	stateCookie, err := r.Cookie("oauth_state")
-	if err != nil || stateCookie.Value != r.URL.Query().Get("state") {
+	if !VerifySignedState(r.URL.Query().Get("state")) {
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)
 		return
 	}
@@ -131,7 +132,10 @@ func (h *AuthHandler) handleCallback(
 		return
 	}
 
-	jwt, err := auth.IssueToken(userID, sessionID)
+	// TODO: handle error of uuid parsing
+	userIDAsUuid, _ := uuid.Parse(userID.String())
+	sessionIDAsUuid, _ := uuid.Parse(sessionID.String())
+	jwt, err := auth.IssueToken(userIDAsUuid, sessionIDAsUuid)
 	if err != nil {
 		http.Error(w, "jwt error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -146,7 +150,7 @@ func (h *AuthHandler) handleCallback(
 		Path:     "/",
 		MaxAge:   int(24 * time.Hour / time.Second),
 	})
-	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, frontendURL+"/dashboard", http.StatusTemporaryRedirect)
 }
 
 // ── Database helpers ──────────────────────────────────────────────────────────
@@ -170,9 +174,12 @@ func (h *AuthHandler) upsertOAuthAccount(
 		`SELECT user_id::text FROM oauth_accounts WHERE provider = $1 AND provider_user_id = $2`,
 		provider, info.ProviderUserID,
 	).Scan(&existingUserID)
+	// when user first logs in, no oauth_accounts exist, but that does not mean an error
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("lookup oauth account: %w", err)
+	}
 
 	var uid string
-
 	if existingUserID == nil {
 		// First time — create a new user
 		err = tx.QueryRow(ctx,

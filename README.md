@@ -26,7 +26,7 @@ cp .env.example .env
 **Spotify**
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 2. Create an app
-3. Add redirect URI: `http://localhost:8080/auth/spotify/callback`
+3. Add redirect URI: `http://127.0.0.1:8080/auth/spotify/callback`
 
 ### 3. Start the stack
 
@@ -45,6 +45,16 @@ docker compose up --build
 ## Database Schema Design
 
 The schema is in `backend/migrations/001_initial_schema.sql`.
+
+### Creating and running migrations
+
+1. Create the migration file in `backend/migrations/`
+2. Set file permissions to allow reading those files
+```
+chmod 755 backend/migrations
+chmod 644 backend/migrations/*.sql
+```
+
 
 ### Core idea: separate `users` from `oauth_accounts`
 
